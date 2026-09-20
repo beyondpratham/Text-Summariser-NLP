@@ -1,6 +1,7 @@
 torch>=2.9
 transformers>=4.57
 datasets>=4.0
+huggingface-hub>=0.25
 sentencepiece>=0.2
 rouge-score>=0.1.2
 bert-score>=0.3.13

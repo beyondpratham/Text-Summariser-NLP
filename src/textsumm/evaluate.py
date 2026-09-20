@@ -1,11 +1,23 @@
 """ROUGE and BERTScore computation, matching the metrics used by ILSUM Task 1."""
 
 from bert_score import score as bert_score
-from rouge_score import rouge_scorer
+from rouge_score import rouge_scorer, tokenizers
+
+
+class WhitespaceTokenizer(tokenizers.Tokenizer):
+    """rouge_score's built-in tokenizer regexes out everything but [a-z0-9],
+    which silently drops Devanagari text entirely and reports 0 overlap for
+    every pair. Splitting on whitespace instead keeps Hindi tokens intact.
+    """
+
+    def tokenize(self, text):
+        return text.split()
 
 
 def compute_rouge(predictions: list[str], references: list[str]) -> dict:
-    scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=False)
+    scorer = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"], use_stemmer=False, tokenizer=WhitespaceTokenizer()
+    )
     totals = {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
     n = len(predictions)
     for pred, ref in zip(predictions, references):
