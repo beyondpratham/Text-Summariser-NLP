@@ -10,5 +10,5 @@ scikit-learn>=1.5
 indic-nlp-library>=0.92
 pyyaml>=6.0
 tqdm>=4.66
-pandas>=2.2
+pandas>=2.3,<3.0
 pytest>=8.0
