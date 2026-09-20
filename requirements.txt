@@ -1,0 +1,14 @@
+torch>=2.9
+transformers>=4.57
+datasets>=4.0
+sentencepiece>=0.2
+rouge-score>=0.1.2
+bert-score>=0.3.13
+nltk>=3.9
+networkx>=3.4
+scikit-learn>=1.5
+indic-nlp-library>=0.92
+pyyaml>=6.0
+tqdm>=4.66
+pandas>=2.2
+pytest>=8.0
