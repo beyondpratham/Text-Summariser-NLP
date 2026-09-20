@@ -1,8 +1,10 @@
 torch>=2.9
+accelerate>=1.1
 transformers>=4.57
 datasets>=4.0
 huggingface-hub>=0.25
 sentencepiece>=0.2
+protobuf>=4.25
 rouge-score>=0.1.2
 bert-score>=0.3.13
 nltk>=3.9
