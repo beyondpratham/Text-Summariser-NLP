@@ -4,9 +4,48 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "textsumm"
-version = "0.1.0"
-description = "Abstractive text summarization for Hindi news articles"
+version = "0.2.0"
+description = "Hindi news summarization: extractive baselines, fine-tuned IndicBART, evaluation and a REST API"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Pratham" }]
 requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "rouge-score>=0.1.2",
+    "indic-nlp-library>=0.92",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+model = [
+    "torch>=2.2",
+    "transformers>=4.46",
+    "accelerate>=1.1",
+    "datasets>=3.0",
+    "huggingface-hub>=0.25",
+    "sentencepiece>=0.2",
+    "protobuf>=4.25",
+    "bert-score>=0.3.13",
+]
+serve = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
+
+[project.scripts]
+textsumm-train = "textsumm.train:main"
+textsumm-summarize = "textsumm.infer:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["B905"]

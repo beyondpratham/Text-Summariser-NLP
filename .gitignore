@@ -32,3 +32,5 @@ Thumbs.db
 
 # Leftover coursework files not part of this project
 2024 - Natural Language Processing/
+
+.ruff_cache/
