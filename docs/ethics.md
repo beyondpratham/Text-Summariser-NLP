@@ -19,6 +19,9 @@ working code instead of starting from nothing.
   against its source text at inference time, so it should not be used to produce
   summaries presented as ground truth without human review — particularly not for
   news, medical, or legal content where a fabricated detail could cause real harm.
+  The evaluation reports an *unsupported-number rate* (summaries containing a
+  number that never appears in the article) as a rough measure of this. It
+  catches invented figures only, not wrong names, places, or claims.
 - **Domain and register narrowness.** The model is fine-tuned on BBC Hindi news
   articles. It will likely perform worse on other registers (conversational text,
   regional dialects, technical or legal documents) and shouldn't be assumed to
