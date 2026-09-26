@@ -9,9 +9,7 @@ import json
 import tarfile
 from pathlib import Path
 
-from huggingface_hub import hf_hub_download
-
-from textsumm.utils import clean_text
+from textsumm.utils import clean_text, tokenize
 
 DATASET_REPO = "csebuetnlp/xlsum"
 DATASET_ARCHIVE = "data/hindi_XLSum_v2.0.tar.bz2"
@@ -37,10 +35,21 @@ def _extract_raw_jsonl() -> Path:
     if marker.exists():
         return RAW_DIR
 
+    from huggingface_hub import hf_hub_download
+
     archive_path = hf_hub_download(DATASET_REPO, DATASET_ARCHIVE, repo_type="dataset")
     with tarfile.open(archive_path, "r:bz2") as tar:
         tar.extractall(RAW_DIR, filter="data")
     return RAW_DIR
+
+
+def is_usable(article: str, summary: str) -> bool:
+    """Drop pairs that can't teach summarization: empty sides, or a "summary"
+    at least as long as the article it summarizes.
+    """
+    if not article or not summary:
+        return False
+    return len(tokenize(summary)) < len(tokenize(article))
 
 
 def download_and_clean(splits=("train", "validation", "test"), max_examples: dict | None = None):
@@ -58,9 +67,10 @@ def download_and_clean(splits=("train", "validation", "test"), max_examples: dic
     for split in splits:
         raw_path = raw_dir / SPLIT_FILENAMES[split]
         cap = max_examples.get(split)
-
         out_path = PROCESSED_DIR / f"{split}.jsonl"
-        count = 0
+        seen_ids: set[str] = set()
+        count = dropped = 0
+
         with open(raw_path, encoding="utf-8") as src, open(out_path, "w", encoding="utf-8") as f:
             for line in src:
                 if cap is not None and count >= cap:
@@ -68,25 +78,29 @@ def download_and_clean(splits=("train", "validation", "test"), max_examples: dic
                 row = json.loads(line)
                 article = clean_text(row["text"])
                 summary = clean_text(row["summary"])
-                if not article or not summary:
+                if row["id"] in seen_ids or not is_usable(article, summary):
+                    dropped += 1
                     continue
-                f.write(json.dumps({"id": row["id"], "text": article, "summary": summary}, ensure_ascii=False) + "\n")
+                seen_ids.add(row["id"])
+                record = {"id": row["id"], "text": article, "summary": summary}
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 count += 1
+
         written[split] = count
-        print(f"wrote {count} examples to {out_path}")
+        print(f"{split}: wrote {count} examples to {out_path} (dropped {dropped})")
 
     return written
 
 
-def load_processed(split: str):
+def load_processed(split: str, max_examples: int | None = None) -> list[dict]:
     path = PROCESSED_DIR / f"{split}.jsonl"
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found. Run `python scripts/download_data.py` first."
-        )
+        raise FileNotFoundError(f"{path} not found. Run `python scripts/download_data.py` first.")
     examples = []
     with open(path, encoding="utf-8") as f:
         for line in f:
+            if max_examples is not None and len(examples) >= max_examples:
+                break
             examples.append(json.loads(line))
     return examples
 

@@ -1,0 +1,38 @@
+{
+  "train": {
+    "examples": 70777,
+    "article_words_mean": 566.7931814007376,
+    "article_words_p50": 406.0,
+    "article_words_p95": 1489.0,
+    "article_sentences_mean": 29.904192039786935,
+    "summary_words_mean": 28.309818161267078,
+    "summary_words_p95": 47.0,
+    "compression_ratio_mean": 23.796231292715998,
+    "novel_unigram_ratio": 0.3147776733910681,
+    "novel_bigram_ratio": 0.7371532411584439
+  },
+  "validation": {
+    "examples": 8847,
+    "article_words_mean": 457.9215553294902,
+    "article_words_p50": 380.0,
+    "article_words_p95": 1024.0,
+    "article_sentences_mean": 23.717418333898497,
+    "summary_words_mean": 26.914660336837347,
+    "summary_words_p95": 41.0,
+    "compression_ratio_mean": 18.024259940748433,
+    "novel_unigram_ratio": 0.3063752607830078,
+    "novel_bigram_ratio": 0.7300870683508222
+  },
+  "test": {
+    "examples": 8847,
+    "article_words_mean": 460.252175878829,
+    "article_words_p50": 376.0,
+    "article_words_p95": 1021.0,
+    "article_sentences_mean": 23.81202667570928,
+    "summary_words_mean": 26.862665310274668,
+    "summary_words_p95": 40.0,
+    "compression_ratio_mean": 18.1383741123368,
+    "novel_unigram_ratio": 0.30853285684795984,
+    "novel_bigram_ratio": 0.7319485787620914
+  }
+}
