@@ -60,6 +60,9 @@ def parse_args():
         help="keep the shared 64k-token embedding matrix fixed (saves memory on small machines)",
     )
     parser.add_argument("--max-train-samples", type=int, default=2000, help="0 = use the full training set")
+    parser.add_argument(
+        "--train-offset", type=int, default=0, help="skip this many training examples (to continue on unseen data)"
+    )
     parser.add_argument("--max-eval-samples", type=int, default=200)
     parser.add_argument("--max-source-length", type=int, default=512)
     parser.add_argument("--max-target-length", type=int, default=96)
@@ -100,7 +103,8 @@ def main():
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable parameters: {trainable / 1e6:.1f}M")
 
-    train_examples = load_processed("train", args.max_train_samples or None)
+    limit = args.train_offset + args.max_train_samples if args.max_train_samples else None
+    train_examples = load_processed("train", limit)[args.train_offset :]
     eval_examples = load_processed("validation", args.max_eval_samples or None)
     preprocess = make_preprocess_fn(tokenizer, args.max_source_length, args.max_target_length)
     train_ds = Dataset.from_list(train_examples).map(preprocess, batched=True, remove_columns=["id", "text", "summary"])
