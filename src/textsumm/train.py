@@ -19,7 +19,7 @@ import numpy as np
 
 from textsumm.data import load_processed
 from textsumm.evaluate import compute_rouge
-from textsumm.model import clean_output, configure_generation, encode, load_model, load_tokenizer
+from textsumm.model import MODEL_NAME, clean_output, configure_generation, encode, load_model, load_tokenizer
 from textsumm.utils import set_seed
 
 
@@ -53,6 +53,12 @@ def make_compute_metrics(tokenizer):
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--model-name", type=str, default=MODEL_NAME, help="checkpoint to start from")
+    parser.add_argument(
+        "--freeze-embeddings",
+        action="store_true",
+        help="keep the shared 64k-token embedding matrix fixed (saves memory on small machines)",
+    )
     parser.add_argument("--max-train-samples", type=int, default=2000, help="0 = use the full training set")
     parser.add_argument("--max-eval-samples", type=int, default=200)
     parser.add_argument("--max-source-length", type=int, default=512)
@@ -86,9 +92,13 @@ def main():
         Seq2SeqTrainingArguments,
     )
 
-    tokenizer = load_tokenizer()
-    model = configure_generation(load_model(), tokenizer)
+    tokenizer = load_tokenizer(args.model_name)
+    model = configure_generation(load_model(args.model_name), tokenizer)
     model.generation_config.no_repeat_ngram_size = 3
+    if args.freeze_embeddings:
+        model.get_input_embeddings().weight.requires_grad_(False)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"trainable parameters: {trainable / 1e6:.1f}M")
 
     train_examples = load_processed("train", args.max_train_samples or None)
     eval_examples = load_processed("validation", args.max_eval_samples or None)

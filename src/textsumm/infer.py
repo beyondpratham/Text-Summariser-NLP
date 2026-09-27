@@ -97,6 +97,7 @@ def main():
     parser.add_argument("--device", type=str, default=None, help="cuda / mps / cpu (default: auto)")
     parser.add_argument("--max-new-tokens", type=int, default=80)
     parser.add_argument("--num-beams", type=int, default=4)
+    parser.add_argument("--max-source-length", type=int, default=512)
     args = parser.parse_args()
 
     if args.file:
@@ -105,7 +106,9 @@ def main():
     else:
         text = args.text
 
-    settings = GenerationSettings(max_new_tokens=args.max_new_tokens, num_beams=args.num_beams)
+    settings = GenerationSettings(
+        max_source_length=args.max_source_length, max_new_tokens=args.max_new_tokens, num_beams=args.num_beams
+    )
     summarizer = Summarizer(args.checkpoint, device=args.device, settings=settings)
     print(summarizer(text))
 

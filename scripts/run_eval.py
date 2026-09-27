@@ -2,7 +2,7 @@
 
     python scripts/run_eval.py --checkpoint checkpoints/indicbart-hindi --max-samples 1000
 
-Writes results/model_scores.json and results/sample_predictions.jsonl.
+Writes results/<name>_scores.json and results/<name>_predictions.jsonl.
 """
 
 import argparse
@@ -25,13 +25,17 @@ def main():
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-beams", type=int, default=4)
     parser.add_argument("--max-new-tokens", type=int, default=80)
+    parser.add_argument("--max-source-length", type=int, default=512, help="match the value used in training")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--num-samples-to-save", type=int, default=25)
+    parser.add_argument("--output-name", type=str, default="model", help="writes results/<name>_scores.json")
     parser.add_argument("--no-bertscore", action="store_true")
     args = parser.parse_args()
 
     examples = load_processed(args.split, args.max_samples or None)
-    settings = GenerationSettings(num_beams=args.num_beams, max_new_tokens=args.max_new_tokens)
+    settings = GenerationSettings(
+        max_source_length=args.max_source_length, num_beams=args.num_beams, max_new_tokens=args.max_new_tokens
+    )
     summarizer = Summarizer(args.checkpoint, device=args.device, settings=settings)
 
     start = time.perf_counter()
@@ -55,16 +59,17 @@ def main():
         checkpoint=args.checkpoint,
         device=summarizer.device,
         num_beams=args.num_beams,
+        max_source_length=args.max_source_length,
         batch_size=args.batch_size,
         articles_per_second=round(len(examples) / elapsed, 2),
     )
     print(json.dumps(scores, indent=2))
 
     RESULTS_DIR.mkdir(exist_ok=True)
-    with open(RESULTS_DIR / "model_scores.json", "w", encoding="utf-8") as f:
+    with open(RESULTS_DIR / f"{args.output_name}_scores.json", "w", encoding="utf-8") as f:
         json.dump(scores, f, indent=2)
 
-    with open(RESULTS_DIR / "sample_predictions.jsonl", "w", encoding="utf-8") as f:
+    with open(RESULTS_DIR / f"{args.output_name}_predictions.jsonl", "w", encoding="utf-8") as f:
         for ex, pred in list(zip(examples, predictions))[: args.num_samples_to_save]:
             row = {"id": ex["id"], "text": ex["text"][:400], "reference": ex["summary"], "prediction": pred}
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
