@@ -22,6 +22,9 @@ working code instead of starting from nothing.
   The evaluation reports an *unsupported-number rate* (summaries containing a
   number that never appears in the article) as a rough measure of this. It
   catches invented figures only, not wrong names, places, or claims.
+  For the released model, 3.1% of test summaries contain such a number, and
+  manual review found wrong facts the metric misses (for example, a city placed
+  in the wrong state). See section 6 of the report.
 - **Domain and register narrowness.** The model is fine-tuned on BBC Hindi news
   articles. It will likely perform worse on other registers (conversational text,
   regional dialects, technical or legal documents) and shouldn't be assumed to
@@ -30,9 +33,9 @@ working code instead of starting from nothing.
   are framed) are baked into the training data and, by extension, into what the model
   learns to consider "summary-worthy." This is worth keeping in mind before using the
   model on content far outside the BBC's editorial scope.
-- **Compute-scale caveat.** The checkpoint(s) in this repo were fine-tuned on a
-  laptop CPU on a subset of the training data (see the report for exact numbers) —
-  not the full dataset on a GPU. Results here should be read as a proof of concept,
+- **Compute-scale caveat.** The reported model was fine-tuned on a laptop CPU on
+  1,600 of the 70,777 training articles, using only the first 256 tokens of each
+  article, not the full dataset on a GPU. Results here should be read as a proof of concept,
   not a state-of-the-art claim; see the README for how to scale the training run up.
 
 ## Intended use

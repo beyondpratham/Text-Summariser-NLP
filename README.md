@@ -18,7 +18,10 @@ on Devanagari text without any error message (see [What broke on Hindi](#what-br
 - **Baselines built from scratch in NumPy**: Lead-N, TextRank (TF-IDF + power-iteration
   PageRank), and a greedy extractive oracle for the upper bound.
 - **IndicBART fine-tuning** with Hugging Face `Seq2SeqTrainer`: in-loop ROUGE
-  validation, best-checkpoint selection, early stopping, mixed precision, label smoothing.
+  validation, best-checkpoint selection, early stopping, mixed precision, label smoothing,
+  warm-starting from any IndicBART-family checkpoint, and resuming on unseen data.
+  The fine-tuned model **beats all extractive baselines by 4.5 ROUGE-L**, with
+  non-overlapping 95% CIs.
 - **Batched inference** with length-sorted batching to minimize padding, beam search, and
   n-gram repetition blocking. Runs on CUDA, Apple MPS, or CPU.
 - **Evaluation** beyond a single ROUGE number: 95% bootstrap confidence intervals,
@@ -31,29 +34,54 @@ on Devanagari text without any error message (see [What broke on Hindi](#what-br
 
 ## Results
 
-XL-Sum Hindi **test set, all 8,847 articles**. ROUGE F1 uses a Devanagari-aware
-tokenizer; ± is the half-width of the 95% bootstrap confidence interval.
+All systems are scored on the **same 1,000 XL-Sum Hindi test articles** (the first
+1,000 of the 8,847-article test split). ROUGE F1 uses a Devanagari-aware tokenizer;
+± is the half-width of the 95% bootstrap confidence interval. Scores ×100.
 
-| Method | ROUGE-1 | ROUGE-2 | ROUGE-L | Avg. words |
-|---|---|---|---|---|
-| Lead-1 | 22.75 ± 0.22 | 5.31 ± 0.14 | 17.23 ± 0.18 | 23.1 |
-| Lead-2 | **25.12** ± 0.19 | 6.14 ± 0.12 | 17.31 ± 0.14 | 44.2 |
-| Lead-3 | 24.16 ± 0.16 | **6.22** ± 0.11 | 16.10 ± 0.12 | 65.1 |
-| TextRank (1 sentence) | 24.28 ± 0.21 | 5.23 ± 0.14 | **17.46** ± 0.17 | 30.9 |
-| *Extractive oracle (upper bound)* | *38.47* ± 0.19 | *14.83* ± 0.20 | *26.09* ± 0.20 | 38.4 |
+| Method | ROUGE-1 | ROUGE-2 | ROUGE-L | BERTScore F1 | Words |
+|---|---|---|---|---|---|
+| Lead-1 | 22.15 ± 0.64 | 4.75 ± 0.37 | 16.62 ± 0.51 | 70.72 | 22.9 |
+| Lead-2 | 24.67 ± 0.57 | 5.72 ± 0.35 | 17.01 ± 0.43 | 70.68 | 43.8 |
+| Lead-3 | 23.77 ± 0.49 | 5.80 ± 0.32 | 15.92 ± 0.35 | 70.37 | 64.5 |
+| TextRank (1 sentence) | 24.11 ± 0.58 | 4.97 ± 0.36 | 17.04 ± 0.48 | 70.53 | 30.5 |
+| IndicBART-SS, zero-shot | 18.80 ± 0.64 | 4.70 ± 0.40 | 15.38 ± 0.58 | 69.62 | 10.1 |
+| **IndicBART-SS, fine-tuned (this repo)** | **26.76** ± 0.73 | **7.46** ± 0.53 | **21.57** ± 0.65 | **73.05** | 17.7 |
+| *Extractive oracle (upper bound)* | *38.20* ± 0.53 | *14.63* ± 0.55 | *25.82* ± 0.54 | *74.27* | 38.1 |
 
-Scores ×100. Raw output: [`results/baseline_scores.json`](results/baseline_scores.json).
+IndicBART-SS is [`ai4bharat/MultiIndicSentenceSummarization`](https://huggingface.co/ai4bharat/MultiIndicSentenceSummarization),
+IndicBART already fine-tuned on Indic sentence summarization. Raw scores and sample
+outputs are in [`results/`](results/).
 
-The oracle picks the sentences that best match the reference, so it is the
-ceiling for any system that only copies sentences from the article. 73% of the
-reference summaries' bigrams never appear in the article
-([`results/dataset_stats.json`](results/dataset_stats.json)), so even that ceiling
-is low. That gap is what the abstractive model is for.
+- **Fine-tuning beats every extractive baseline**, with no overlap in confidence
+  intervals: ROUGE-L +4.5 and BERTScore +2.3 over the best baseline. Lead-N is
+  hard to beat on news, because journalists put the key facts first.
+- **Fine-tuning is what makes the difference.** The same checkpoint before fine-tuning
+  writes 10-word headlines and scores ROUGE-1 18.8. After fine-tuning it scores 26.8
+  (+8.0).
+- **The model paraphrases.** 47% of its bigrams do not appear in the article,
+  against 0% for the extractive systems.
+- **The extractive ceiling is low.** Even the oracle, which chooses sentences
+  while looking at the reference, reaches only 38.2 ROUGE-1. That's because 73%
+  of reference bigrams never appear in the article
+  ([`results/dataset_stats.json`](results/dataset_stats.json)).
 
-**Fine-tuned IndicBART:** the model has not yet been retrained with the fixes below. The
-earlier proof-of-concept (300 training examples, 1 CPU epoch, before the fixes)
-reached ROUGE-1 0.230 on a 200-article sample and did not beat Lead-N. Full
-retraining on a GPU uses the command in [Training at full scale](#training-at-full-scale).
+**Training budget.** The fine-tuned model was trained on a laptop CPU (Intel
+i5-8250U, 8 GB RAM, no GPU). It saw 1,600 training articles (2.3% of the
+training set), took 200 optimizer steps, and ran for 3.5 hours with 256-token
+inputs. The best checkpoint was chosen by validation ROUGE-L. The numbers above
+are therefore a lower bound for this pipeline, and training on the full set with
+a GPU is the obvious next step ([Training at full scale](#training-at-full-scale)).
+
+**Known weaknesses.** Summaries are shorter than the references (18 vs. 27
+words), which costs recall. 3.1% contain a number that is not in the article. Manual
+review also finds factual slips, such as placing Malegaon in Madhya Pradesh
+instead of Maharashtra. Treat outputs as drafts for human review
+([`docs/ethics.md`](docs/ethics.md)).
+
+On the full 8,847-article test set, the extractive baselines score within 0.6
+points of the subset above (Lead-2: 25.12 / 6.14 / 17.31;
+[`results/baseline_scores.json`](results/baseline_scores.json)), so the subset is
+representative.
 
 ## What broke on Hindi
 
@@ -86,7 +114,7 @@ pytest                               # unit tests
 
 ```bash
 # extractive methods work with no model; set a checkpoint to enable the abstractive one
-TEXTSUMM_CHECKPOINT=checkpoints/indicbart-hindi uvicorn textsumm.api:app --port 8000
+TEXTSUMM_CHECKPOINT=checkpoints/indicbart-xlsum-hi uvicorn textsumm.api:app --port 8000
 
 curl -X POST localhost:8000/summarize -H "Content-Type: application/json" \
   -d '{"texts": ["दिल्ली में आज भारी बारिश हुई। सड़कों पर पानी भर गया।"], "method": "model"}'
@@ -100,20 +128,30 @@ With Docker:
 
 ```bash
 docker build -t hindi-summarizer .
-docker run -p 8000:8000 -v "$(pwd)/checkpoints/indicbart-hindi:/model" hindi-summarizer
+docker run -p 8000:8000 -v "$(pwd)/checkpoints/indicbart-xlsum-hi:/model" hindi-summarizer
 ```
+
+### Reproduce the reported model (CPU, about 3.5 hours)
+
+```bash
+python -m textsumm.train --model-name ai4bharat/MultiIndicSentenceSummarization     --freeze-embeddings --max-train-samples 1600 --max-eval-samples 64     --max-source-length 256 --max-target-length 64 --batch-size 4 --grad-accum 2     --lr 1e-4 --eval-steps 50 --output-dir checkpoints/indicbart-xlsum-hi
+
+python scripts/run_eval.py --checkpoint checkpoints/indicbart-xlsum-hi --max-samples 1000     --max-source-length 256 --output-name indicbart_finetuned
+```
+
+`--freeze-embeddings` keeps the shared 64k x 1024 vocabulary matrix fixed, which
+saves about 0.8 GB of optimizer state and fits training into 8 GB of RAM. To keep
+training on examples the model hasn't seen, pass `--model-name <checkpoint>
+--train-offset 1600`. Checkpoints are about 1 GB and are not committed.
 
 ### Training at full scale
 
 ```bash
-# single GPU (e.g. a free Kaggle/Colab T4), full 70.7k training set
-python -m textsumm.train --max-train-samples 0 --epochs 3 --batch-size 16 --grad-accum 2 \
-    --output-dir checkpoints/indicbart-hindi
+# single GPU (e.g. a free Kaggle/Colab T4), full 70.7k training set, full article context
+python -m textsumm.train --model-name ai4bharat/MultiIndicSentenceSummarization     --max-train-samples 0 --epochs 3 --batch-size 16 --grad-accum 2     --output-dir checkpoints/indicbart-xlsum-hi-full
 
-python scripts/run_eval.py --checkpoint checkpoints/indicbart-hindi --max-samples 0
+python scripts/run_eval.py --checkpoint checkpoints/indicbart-xlsum-hi-full --max-samples 0
 ```
-
-For a quick CPU smoke test, use `--max-train-samples 300 --eval-steps 50`.
 
 ## Project layout
 
@@ -127,7 +165,7 @@ src/textsumm/
   infer.py       batched Summarizer class + CLI
   evaluate.py    ROUGE, BERTScore, bootstrap CIs, abstractiveness, unsupported numbers
   api.py         FastAPI service
-scripts/         download_data, dataset_stats, run_baseline, run_eval
+scripts/         download_data, dataset_stats, run_baseline, run_eval, run_reference
 tests/           unit tests (no torch or network needed)
 docs/            project report and ethics notes
 results/         score files from actual runs

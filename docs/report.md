@@ -79,9 +79,20 @@ Three families of system are implemented and compared.
      2017). It reads the reference, so it is an upper bound for sentence
      selection rather than a usable system.
 
-2. **Abstractive model**: fine-tune `ai4bharat/IndicBART` on (article, summary)
+2. **Abstractive model**: fine-tune an IndicBART checkpoint on (article, summary)
    pairs with teacher forcing and label-smoothed cross-entropy. Inference uses beam
    search (4 beams) with trigram repetition blocking.
+
+   The starting checkpoint is `ai4bharat/MultiIndicSentenceSummarization` (called
+   IndicBART-SS below): IndicBART already fine-tuned by its authors on 431K Indic
+   sentence-summarization pairs. It uses the same tokenizer and sequence format as base
+   IndicBART, so the pipeline runs unchanged. Two zero-shot checks on 24 validation
+   articles decided the choice. Base IndicBART, pretrained only to reconstruct its
+   input, mostly copied article sentences. IndicBART-SS already wrote on-topic
+   abstractive summaries, just shorter than XL-Sum's. With a CPU-only compute budget,
+   learning XL-Sum's length and style needs far fewer updates than learning to
+   summarize from scratch. IndicBART-SS also generates 2.3x faster, because its
+   outputs are shorter.
 
 **Tokenization for Hindi.** Two standard tools fail silently on Devanagari. Python's
 `\w` does not match vowel signs (matras), so scikit-learn's default TF-IDF pattern
@@ -138,36 +149,78 @@ article (one training pair was dropped). Corpus statistics
 The last row is the most important one. Most reference summaries are paraphrases,
 not copied sentences, which caps what extractive methods can reach.
 
-**Model settings.** Maximum source and target lengths are 512 and 96 tokens. 512
-tokens covers the median article, and 96 tokens is well above the p95 summary length.
-Fine-tuning uses AdamW with learning rate 5e-5, weight decay 0.01, 5% linear warmup, and
-label smoothing 0.1. ROUGE-L is computed on a validation subset at a fixed step
-interval, the best checkpoint is kept, and training stops early after three
-evaluations without improvement. bf16/fp16 is enabled automatically on GPU.
+**Model settings.** The fine-tuned model was trained on a laptop CPU (Intel
+i5-8250U, 4 cores, 8 GB RAM, no GPU), which set the scale of the experiment:
+
+| Setting | Value |
+|---|---|
+| Starting checkpoint | `ai4bharat/MultiIndicSentenceSummarization` |
+| Training examples | 1,600 (first 1,600 of the 70,777-example train split) |
+| Max source / target tokens | 256 / 64 |
+| Batch size | 4, gradient accumulation 2 (effective 8) |
+| Optimizer steps | 200 (1 epoch), about 3.5 hours |
+| Learning rate | 1e-4, 5% linear warmup then linear decay; AdamW, weight decay 0.01 |
+| Regularization | label smoothing 0.1; shared embedding matrix frozen |
+| Model selection | validation ROUGE-L on 64 articles every 50 steps; best kept |
+
+Freezing the 64k x 1024 shared embedding matrix, which is tied to the output
+layer, leaves 178.5M of the model's 244M parameters trainable. It saves about
+0.8 GB of AdamW state, which is what makes training fit in 8 GB of RAM. The
+256-token source limit covers roughly the first 215 words, about half the median
+article. News puts the key facts first (inverted pyramid), so that part carries
+most of the summary-relevant content.
+
+Validation scores over training:
+
+| Step | Train loss | Val loss | Val ROUGE-1 | Val ROUGE-L | Val words |
+|---|---|---|---|---|---|
+| 50 | 4.95 | 4.17 | 26.1 | 21.7 | 18.2 |
+| 100 | 4.58 | 3.99 | 29.4 | 23.9 | 18.0 |
+| 150 | 4.57 | 3.96 | 29.5 | **24.0** | 17.5 |
+| 200 | 4.64 | 3.95 | 29.2 | 23.4 | 18.6 |
+
+Step 150 was selected. Training losses include label smoothing, so they sit
+above the unsmoothed validation loss.
 
 ## 5. Results
 
-All 8,847 test articles. ROUGE F1 with the Devanagari-aware tokenizer; ± is the
-half-width of the 95% bootstrap confidence interval.
+Every system is scored on the same 1,000 test articles (the first 1,000 of the
+8,847-article test split), because beam-search generation on a CPU takes about 4
+seconds per article. ROUGE F1 uses the Devanagari-aware tokenizer; ± is the
+half-width of the 95% bootstrap confidence interval. BERTScore uses
+`bert-base-multilingual-cased`. Scores ×100.
 
-| Method | ROUGE-1 | ROUGE-2 | ROUGE-L | Avg. words |
-|---|---|---|---|---|
-| Lead-1 | 22.75 ± 0.22 | 5.31 ± 0.14 | 17.23 ± 0.18 | 23.1 |
-| Lead-2 | **25.12** ± 0.19 | 6.14 ± 0.12 | 17.31 ± 0.14 | 44.2 |
-| Lead-3 | 24.16 ± 0.16 | **6.22** ± 0.11 | 16.10 ± 0.12 | 65.1 |
-| TextRank (1 sentence) | 24.28 ± 0.21 | 5.23 ± 0.14 | **17.46** ± 0.17 | 30.9 |
-| *Extractive oracle (upper bound)* | *38.47* ± 0.19 | *14.83* ± 0.20 | *26.09* ± 0.20 | 38.4 |
+| Method | ROUGE-1 | ROUGE-2 | ROUGE-L | BERTScore F1 | Words | Novel bigrams | Unsupported numbers |
+|---|---|---|---|---|---|---|---|
+| Lead-1 | 22.15 ± 0.64 | 4.75 ± 0.37 | 16.62 ± 0.51 | 70.72 | 22.9 | 0% | 0% |
+| Lead-2 | 24.67 ± 0.57 | 5.72 ± 0.35 | 17.01 ± 0.43 | 70.68 | 43.8 | 0% | 0% |
+| Lead-3 | 23.77 ± 0.49 | 5.80 ± 0.32 | 15.92 ± 0.35 | 70.37 | 64.5 | 0% | 0% |
+| TextRank (1 sentence) | 24.11 ± 0.58 | 4.97 ± 0.36 | 17.04 ± 0.48 | 70.53 | 30.5 | 0% | 0% |
+| IndicBART-SS, zero-shot | 18.80 ± 0.64 | 4.70 ± 0.40 | 15.38 ± 0.58 | 69.62 | 10.1 | 38.4% | 1.3% |
+| **IndicBART-SS, fine-tuned** | **26.76** ± 0.73 | **7.46** ± 0.53 | **21.57** ± 0.65 | **73.05** | 17.7 | 46.7% | 3.1% |
+| *Extractive oracle* | *38.20* ± 0.53 | *14.63* ± 0.55 | *25.82* ± 0.54 | *74.27* | 38.1 | 1.4% | 0% |
 
-Scores ×100. Raw output: [`results/baseline_scores.json`](results/baseline_scores.json).
+The extractive baselines were also scored on the full test set. There they come
+within 0.6 points of the subset numbers, which shows the subset is representative:
 
-**Fine-tuned IndicBART.** An initial proof-of-concept run (300 training examples,
-one CPU epoch, before the sequence-format fixes in Section 3) reached ROUGE-1 0.230
-on a 200-article test sample, below Lead-N. Its training loss was still falling
-steeply (6.98 at step 20 to 5.09 at step 60). All 20 saved sample predictions began with a
-literal `<2hi>` tag and were cut off at the 64-token limit, which is how the EOS and
-decoding bugs were found. Retraining on the full training set with the fixed
-pipeline is the next step (`python -m textsumm.train --max-train-samples 0 --epochs 3`).
-Its scores will be reported in `results/model_scores.json`.
+| Method (all 8,847 articles) | ROUGE-1 | ROUGE-2 | ROUGE-L |
+|---|---|---|---|
+| Lead-1 | 22.75 ± 0.22 | 5.31 ± 0.14 | 17.23 ± 0.18 |
+| Lead-2 | 25.12 ± 0.19 | 6.14 ± 0.12 | 17.31 ± 0.14 |
+| Lead-3 | 24.16 ± 0.16 | 6.22 ± 0.11 | 16.10 ± 0.12 |
+| TextRank (1 sentence) | 24.28 ± 0.21 | 5.23 ± 0.14 | 17.46 ± 0.17 |
+| *Extractive oracle* | *38.47* ± 0.19 | *14.83* ± 0.20 | *26.09* ± 0.20 |
+
+Raw outputs: `results/baseline_scores.json` (full test),
+`results/baseline_scores_test1k.json`, `results/indicbart_zeroshot_scores.json`,
+`results/indicbart_finetuned_scores.json`, and the matching `*_predictions.jsonl`
+sample files.
+
+**History.** An initial proof-of-concept run of the pipeline, before the fixes in
+Section 3, trained base IndicBART on 300 examples. It reached ROUGE-1 23.0 on 200 test
+articles, below Lead-N. Every one of its saved predictions began with a literal
+`<2hi>` tag and ran to the 64-token cap without ending, which is how the EOS and
+decoding bugs were found.
 
 ## 6. Discussion
 
@@ -192,10 +245,41 @@ on the full test set is on par with the best Lead-N setting. The two runs differ
 sample and summary length too, so this is not a controlled comparison, but it is
 consistent with the old similarity graph being nearly empty.
 
-**Diagnostics.** Every extractive system has a novel bigram ratio near 0 and an
-unsupported-number rate of 0, as expected for systems that copy text. These two
-columns are baselines for judging the abstractive model: some novelty is the point,
-but any unsupported numbers are hallucinations.
+**Fine-tuning beats every extractive baseline, and the margin is significant.**
+ROUGE-L improves by 4.5 points over the best baseline (21.57 vs. 17.04), far
+outside either confidence interval. ROUGE-2 and BERTScore also improve (+1.7 and
++2.3). ROUGE-1 improves by 2.1 points even though the model's summaries are less
+than half as long as Lead-2's. ROUGE-L gains the most because the model writes one
+coherent sentence in the reference's structure, where extractive systems return
+whatever sentence came first.
+
+**Most of the gain comes from fine-tuning, not the starting checkpoint.** Zero-shot,
+IndicBART-SS scores *below* every extractive baseline (18.8 ROUGE-1), because it
+writes 10-word headlines. After 200 updates on 1,600 articles it gains 8.0 ROUGE-1
+and 6.2 ROUGE-L, and its summaries grow to 18 words.
+
+**Remaining weaknesses.**
+
+- *Length.* Summaries average 17.7 words against 26.9 for the references, which
+  costs recall. Output length stayed near 18 words throughout training (Section 4),
+  well under the 64-token cap, so this is a style the model settled into, not
+  truncation.
+- *Faithfulness.* 3.1% of summaries contain a number not found in the article,
+  against 0% for the extractive systems. Manual review of saved samples also finds
+  errors the metric cannot catch. One summary places Malegaon in Madhya Pradesh
+  instead of Maharashtra. Another produces the degenerate phrase "Iran and Iran".
+  These are the failure modes described by Maynez et al. (2020).
+- *Scale.* The model has seen 2.3% of the training data and only the first 256
+  tokens of each article. The XL-Sum authors' mT5-base model, trained on the full
+  multilingual corpus on GPUs, reports 38.6 ROUGE-1 for Hindi with its own ROUGE
+  implementation. That number is not directly comparable to the scores here,
+  because of the different tokenization, but it shows how much headroom a
+  full-scale run has.
+
+**Diagnostics.** Extractive systems have a novel bigram ratio of 0 and never
+produce unsupported numbers, as expected for copying. The fine-tuned model's 46.7%
+novel bigrams show it paraphrases rather than copies. Its 3.1% unsupported-number
+rate is the cost of that, and it is the number to push down in future work.
 
 ## 7. Conclusion & Future Work
 
@@ -210,13 +294,15 @@ a unit test.
 
 Next steps:
 
-- Fine-tune on the full training set on a GPU and report test-set scores with CIs.
+- Fine-tune on the full training set with 512-token inputs on a GPU. The steady
+  validation gains in Section 4 suggest this is the most direct route to a
+  substantially higher score.
+- Tune the beam-search length penalty on validation data to close the gap
+  between generated and reference summary length.
 - Replace the unsupported-number check with an NLI-based faithfulness score, given
-  the hallucination risk noted in `docs/ethics.md`.
+  the errors found in manual review.
 - Extend to other XL-Sum Indian languages (Bengali, Gujarati, Marathi). IndicBART
   already covers them, and only the language tag and dataset archive name change.
-- Try constrained decoding or a copy mechanism to reduce hallucinated entities and
-  numbers, a known weak point for news summarization.
 
 ## References
 

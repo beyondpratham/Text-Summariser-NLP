@@ -1,0 +1,31 @@
+{
+  "num_examples": 1000,
+  "rouge1": 0.2676225372140591,
+  "rouge1_ci95": [
+    0.26074497108040534,
+    0.2752805192436631
+  ],
+  "rouge2": 0.07460543199451343,
+  "rouge2_ci95": [
+    0.06947969072759924,
+    0.08000702169301134
+  ],
+  "rougeL": 0.21566687899649792,
+  "rougeL_ci95": [
+    0.20947156563694497,
+    0.2223731679263174
+  ],
+  "avg_summary_words": 17.716,
+  "novel_bigram_ratio": 0.4669364051349566,
+  "unsupported_number_rate": 0.031,
+  "bertscore_precision": 0.751531183719635,
+  "bertscore_recall": 0.7116867899894714,
+  "bertscore_f1": 0.7305094003677368,
+  "split": "test",
+  "checkpoint": "checkpoints/indicbart-xlsum-hi",
+  "device": "cpu",
+  "num_beams": 4,
+  "max_source_length": 256,
+  "batch_size": 8,
+  "articles_per_second": 0.02
+}

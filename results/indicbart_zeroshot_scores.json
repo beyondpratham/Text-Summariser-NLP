@@ -1,0 +1,31 @@
+{
+  "num_examples": 1000,
+  "rouge1": 0.18803183475772237,
+  "rouge1_ci95": [
+    0.18162975965226805,
+    0.1944969584198257
+  ],
+  "rouge2": 0.04704711846100726,
+  "rouge2_ci95": [
+    0.043130191109549354,
+    0.051147710661821354
+  ],
+  "rougeL": 0.15375156567383694,
+  "rougeL_ci95": [
+    0.14793104706018623,
+    0.1595763179036991
+  ],
+  "avg_summary_words": 10.128,
+  "novel_bigram_ratio": 0.38380912051914373,
+  "unsupported_number_rate": 0.013,
+  "bertscore_precision": 0.7239076495170593,
+  "bertscore_recall": 0.6713252067565918,
+  "bertscore_f1": 0.6961784958839417,
+  "split": "test",
+  "checkpoint": "ai4bharat/MultiIndicSentenceSummarization",
+  "device": "cpu",
+  "num_beams": 4,
+  "max_source_length": 256,
+  "batch_size": 8,
+  "articles_per_second": 0.54
+}
